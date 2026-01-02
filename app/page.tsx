@@ -4,69 +4,68 @@ import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { DEFAULT_CALL_DATA } from "@/lib/defaultData"
 import { CallDurationPoint } from "@/types/analytics"
+import { isValidEmail } from "@/lib/email"
 
 import EmailContextBanner from "@/components/EmailContentBanner"
 import CallDurationChart from "@/components/charts/DurationChart"
 import EditChartDialog from "@/components/EditChatDialog"
 import { Button } from "@/components/ui/button"
 
+type DataStatus = "DEFAULT" | "LOADED_UNSAVED" | "CUSTOM_SAVED"
+
 export default function DashboardPage() {
-  // Identity
-  const [email, setEmail] = useState<string>("")
+  // Draft vs active identity
+  const [draftEmail, setDraftEmail] = useState("")
+  const [activeEmail, setActiveEmail] = useState<string | null>(null)
 
-  // Analytics data
-  const [chartData, setChartData] = useState<CallDurationPoint[]>(
-    DEFAULT_CALL_DATA
-  )
+  // Data
+  const [chartData, setChartData] =
+    useState<CallDurationPoint[]>(DEFAULT_CALL_DATA)
+  const [status, setStatus] =
+    useState<DataStatus>("DEFAULT")
 
-  // UI state
-  const [isCustomData, setIsCustomData] = useState<boolean>(false)
-  const [editOpen, setEditOpen] = useState<boolean>(false)
+  // UI
+  const [editOpen, setEditOpen] = useState(false)
 
-  // Load data for email
   const loadUserData = async () => {
-    if (!email) return
+    if (!isValidEmail(draftEmail)) return
 
-    const { data, error } = await supabase
+    setActiveEmail(draftEmail)
+
+    const { data } = await supabase
       .from("user_chart_settings")
       .select("chart_data")
-      .eq("email", email)
+      .eq("email", draftEmail)
       .single()
 
-    if (data && !error) {
+    if (data) {
       setChartData(data.chart_data)
-      setIsCustomData(true)
+      setStatus("CUSTOM_SAVED")
     } else {
-      // fallback to default
       setChartData(DEFAULT_CALL_DATA)
-      setIsCustomData(false)
+      setStatus("LOADED_UNSAVED")
     }
   }
 
-  // Save edited data
-  const saveUserData = async (updatedData: CallDurationPoint[]) => {
-    if (!email) return
+  const saveUserData = async (updated: CallDurationPoint[]) => {
+    if (!activeEmail) return
 
-    const { error } = await supabase
+    await supabase
       .from("user_chart_settings")
       .upsert(
         {
-          email,
-          chart_data: updatedData,
+          email: activeEmail,
+          chart_data: updated,
         },
         { onConflict: "email" }
       )
 
-    if (!error) {
-      setChartData(updatedData)
-      setIsCustomData(true)
-    }
+    setChartData(updated)
+    setStatus("CUSTOM_SAVED")
   }
-
 
   return (
     <main className="min-h-screen p-8 space-y-6">
-      {/* Page Header */}
       <section>
         <h1 className="text-2xl font-semibold">
           VoiceOps Analytics
@@ -76,28 +75,34 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      {/* Identity & Context */}
       <EmailContextBanner
-        email={email}
-        setEmail={setEmail}
-        isCustom={isCustomData}
+        draftEmail={draftEmail}
+        setDraftEmail={setDraftEmail}
+        activeEmail={activeEmail}
+        status={status}
         onLoad={loadUserData}
       />
 
-      {/* Chart */}
       <CallDurationChart data={chartData} />
 
-      {/* Actions */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3">
         <Button
           onClick={() => setEditOpen(true)}
-          disabled={!email}
+          disabled={!activeEmail}
         >
-          Edit Call Duration Data
+          Edit Data
         </Button>
+
+        {status === "LOADED_UNSAVED" && (
+          <Button
+            variant="secondary"
+            onClick={() => saveUserData(chartData)}
+          >
+            Save Default Data
+          </Button>
+        )}
       </div>
 
-      {/* Edit Dialog */}
       <EditChartDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
