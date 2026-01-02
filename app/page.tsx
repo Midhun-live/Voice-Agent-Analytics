@@ -68,7 +68,7 @@ export default function DashboardPage() {
     <main className="min-h-screen p-8 space-y-6">
       <section>
         <h1 className="text-2xl font-semibold">
-          VoiceOps Analytics
+          Voice Agent Analytics
         </h1>
         <p className="text-sm text-muted-foreground">
           Call performance insights for voice agents
